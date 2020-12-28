@@ -15,6 +15,7 @@ using namespace std;
 class HLSPlaylistUtilities {
 public:
 	static vector<string> buildList( string infile );
+	static vector<string> buildListFromStream( string strReadBuffer );
 	static vector<string> tokenize( string path, char delimiter );
 	static unsigned int deleteDirectory( string path );
 	static unsigned int createDirectory( string path );

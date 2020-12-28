@@ -34,6 +34,27 @@ vector<string> HLSPlaylistUtilities::buildList( string infile ) {
 	return items;
 }
 
+std::vector<std::string> HLSPlaylistUtilities::buildListFromStream( string strReadBuffer )
+{
+	vector<string> items;
+
+	stringstream ss( strReadBuffer );
+	// Build items list from the file
+	if ( strReadBuffer.length() > 0 ) {
+		string line;
+		while ( !ss.eof() ) {
+			getline( ss, line );
+			line.erase( 0, line.find_first_not_of( "\t\n\v\f\r " ) );
+			if ( line.empty() || ( line[0] == '#' ) ) {
+				continue;
+			}
+			items.push_back( line );
+		}
+	}
+
+	return items;
+}
+
 vector<string> HLSPlaylistUtilities::tokenize( string path, char delimiter ) {
 
 	vector <string> tokens;

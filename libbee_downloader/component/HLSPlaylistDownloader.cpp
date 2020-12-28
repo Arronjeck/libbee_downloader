@@ -173,12 +173,12 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 			string strBuffer;
 			if ( downloadItem( m3u8Info->sUrl.c_str(), strBuffer ) )
 			{
+				vector<string> tsList =  HLSPlaylistUtilities::buildListFromStream( strBuffer );
 				unique_lock<mutex> lock( m_mtxFile );
-				ofstream m3u8Stream = ofstream( localDownloadFileName, ios::out | ios::trunc );
-				if ( m3u8Stream.is_open() )
+				vector<string>::iterator it = tsList.begin();
+				for ( it; it != tsList.end(); ++it )
 				{
-					m3u8Stream << strBuffer;
-					m3u8Stream.close();
+					cout << "item: " << *it << endl;
 				}
 			}
 		}
