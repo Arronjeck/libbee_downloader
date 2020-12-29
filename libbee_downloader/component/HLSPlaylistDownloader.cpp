@@ -20,13 +20,14 @@ THREAD_DATA HLSPlaylistDownloader::m_ShareInfo[GROUP_NUM][THREAD_NUM];
 
 HLSPlaylistDownloader::HLSPlaylistDownloader()
 {
-	InitDownloadThread();
+	//InitDownloadThread();
+	InitDownloader();
 	m_hThreadMonitor = NULL;
 }
 
 HLSPlaylistDownloader::~HLSPlaylistDownloader() {
 	//DeleteDownloadThread();
-
+	DeleteDownloader();
 	if ( m_hThreadMonitor != NULL )
 	{
 		WaitForSingleObject( ( HANDLE * )m_hThreadMonitor, INFINITE );
@@ -48,25 +49,11 @@ void HLSPlaylistDownloader::InitDownloadThread()
 		}
 		m_hThreadHandle[i] = _beginthreadex( NULL, 0, &HLSPlaylistDownloader::downloadFunc, &( m_DownInfo[i] ), 0, &threadID );
 	}
-	for ( int i = 0; i < GROUP_NUM; ++i )
-	{
-		for ( int j = 0; j < THREAD_NUM; ++j )
-		{
-			if ( m_hHandle[i][j] != NULL )
-			{
-				continue;
-			}
-			m_hHandle[i][j] = NULL;
-			//m_hHandle[i][j] = _beginthreadex( NULL, 0, &HLSPlaylistDownloader::downloadFunc, &( m_ShareInfo[i][j] ), 0, &threadID );
-		}
-	}
-
 }
 
 void HLSPlaylistDownloader::DeleteDownloadThread()
 {
 	m_bExitFlag = true;
-
 
 	if ( m_hThreadHandle[0] != NULL )
 	{
@@ -77,14 +64,39 @@ void HLSPlaylistDownloader::DeleteDownloadThread()
 			m_hThreadHandle[i] = NULL;
 		}
 	}
+}
 
-	if ( m_hHandle[0][0] == NULL )
+void HLSPlaylistDownloader::InitDownloader()
+{
+	m_bExitFlag = false;
+	unsigned int threadID;
+	for ( int i = 0; i < GROUP_NUM; ++i )
 	{
-		return;
+		for ( int j = 0; j < THREAD_NUM; ++j )
+		{
+			if ( m_hHandle[i][j] != NULL )
+			{
+				continue;
+			}
+			m_ShareInfo[i][j].sGroup = "group";
+			char szName[20] {0};
+			sprintf_s( szName, 20, "group_%d", i );
+			m_ShareInfo[i][j].sGroup = szName;
+			m_hHandle[i][j] = _beginthreadex( NULL, 0, &HLSPlaylistDownloader::downloadPro, &( m_ShareInfo[i][j] ), 0, &threadID );
+		}
 	}
+}
+
+void HLSPlaylistDownloader::DeleteDownloader()
+{
+	m_bExitFlag = true;
 
 	for ( int i = 0; i < GROUP_NUM; ++i )
 	{
+		if ( m_hHandle[i][0] == NULL )
+		{
+			continue;
+		}
 		WaitForMultipleObjectsEx( sizeof( m_hHandle[i] ), ( HANDLE * )m_hHandle[i], FALSE, INFINITE, FALSE );
 		for ( int j = 0; j < THREAD_NUM; ++j )
 		{
@@ -257,7 +269,6 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 	}
 
 	vector<string> lastList;
-	m_s_hlsList;
 	long long llTime = -1;
 	while ( 1 ) {
 
@@ -314,6 +325,44 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 		cout << "run loop m3u8 cost time: " << dwCountTime << "ms " << " wait 1000ms" << endl;
 		chrono::milliseconds dura( 1000 );
 		this_thread::sleep_for( dura );
+	}
+
+	cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " end" << endl;
+	return 0;
+}
+
+unsigned HLSPlaylistDownloader::downloadPro( void *pArg )
+{
+
+	THREAD_DATA *pInfo = ( THREAD_DATA * )( pArg );
+	if ( pInfo == NULL )
+	{
+		cout << "[Error]: Invalid parameter, thread " << GetCurrentThreadId() << " end" << endl;
+		return -1;
+	}
+	else
+	{
+		cout << "Thread " << GetCurrentThreadId() << " begin" << endl;
+	}
+
+	while ( 1 ) {
+		if ( m_bExitFlag ) {
+			break;
+		}
+
+		if ( pInfo->bStartFlag )
+		{
+			cout << "Thread " << pInfo->sGroup << " is downloading..." << endl;
+			downloadBlockEx( pInfo->sUrl.c_str(), pInfo->iRangeBegin, pInfo->iRangeEnd, pInfo->readBuffer );
+			pInfo->bDoComplete = true;
+			pInfo->bStartFlag = false;
+		}
+		else
+		{
+			cout << "Thread " << pInfo->sGroup << " is waiting..." << endl;
+			chrono::milliseconds dura( 500 );
+			this_thread::sleep_for( dura );
+		}
 	}
 
 	cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " end" << endl;
@@ -684,7 +733,7 @@ void HLSPlaylistDownloader::downloadMediaTwo( string sUrl, string sName )
 
 		if ( m_DownInfo[i].bStartFlag == false )
 		{
-			m_DownInfo[i].Reset( sUrl.c_str(), iBegin, iEnd );
+			m_DownInfo[i].Reset( "single", sUrl.c_str(), iBegin, iEnd );
 		}
 		else
 		{

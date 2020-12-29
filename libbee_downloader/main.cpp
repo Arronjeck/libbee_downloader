@@ -127,9 +127,9 @@ int m3u8_monitor()
 	string localDownloadFileDir = "E:/linux/curl_down/Ymp/100";
 	HLSPlaylistDownloader hlsDownloader;
 	hlsDownloader.StartMonitor( m3u8Url, localDownloadFileDir );
-	hlsDownloader.setDownloadInfo( "http://112.84.104.209:8000/hls/1001/", localDownloadFileDir );
-	hlsDownloader.StartDownloader();
-
+	//hlsDownloader.setDownloadInfo( "http://112.84.104.209:8000/hls/1001/", localDownloadFileDir );
+	//hlsDownloader.StartDownloader();
+	system( "pause" );
 	return 0;
 }
 
@@ -137,7 +137,7 @@ int main( void )
 {
 	//sigle_download();
 	m3u8_monitor();
-	system( "pause" );
+	//system( "pause" );
 
 	return 0;
 }

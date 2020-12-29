@@ -20,6 +20,7 @@ typedef struct __THREAD_DATA
 {
 	mutex mtx_start;	// start download flag
 
+	string sGroup;
 	string sUrl;
 	string readBuffer;
 	int iRangeBegin;
@@ -27,8 +28,9 @@ typedef struct __THREAD_DATA
 	atomic_bool bDoComplete;
 	atomic_bool bStartFlag;
 
-	void Reset( string url, int iBegin, int iEnd )
+	void Reset( string group, string url, int iBegin, int iEnd )
 	{
+		sGroup = group;
 		sUrl = url;
 		readBuffer.clear();
 		iRangeBegin = iBegin;
@@ -38,6 +40,7 @@ typedef struct __THREAD_DATA
 	}
 	__THREAD_DATA()
 	{
+		sGroup = "";
 		sUrl = "";
 		readBuffer.clear();
 		iRangeBegin = 0;
@@ -62,6 +65,7 @@ typedef struct __MONITOR_DATA
 
 } MONITOR_DATA;
 
+
 class HLSPlaylistDownloader {
 
 public:
@@ -70,6 +74,7 @@ public:
 		THREAD_NUM = 3,
 		MAX_THREAD_NUM = 3
 	};
+
 public :
 	HLSPlaylistDownloader();
 	~HLSPlaylistDownloader();
@@ -130,9 +135,12 @@ private:
 	static size_t curlCallBack( void *curlData, size_t size, size_t receievedSize, void *writeToFileBuffer );
 	static unsigned downloadFunc( void *pArg );
 	static unsigned DoM3u8Monitor( void *pArg );
+	static unsigned downloadPro( void *pArg );
 public:
 	void InitDownloadThread();
 	void DeleteDownloadThread();
+	void InitDownloader();
+	void DeleteDownloader();
 	void setDownloadInfo( string urlPath, string outfile );
 	void setDownloadInfoEx( string urlBasePath, string outputDir );
 	bool StartMonitor( string strUrl, string strDurition );
