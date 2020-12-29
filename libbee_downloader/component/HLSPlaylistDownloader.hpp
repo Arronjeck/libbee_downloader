@@ -10,6 +10,7 @@
 #include <atomic>
 #include <process.h>
 #include <vadefs.h>
+#include <vector>
 
 using namespace std;
 
@@ -64,7 +65,11 @@ typedef struct __MONITOR_DATA
 class HLSPlaylistDownloader {
 
 public:
-	enum {MAX_THREAD_NUM = 3};
+	enum {
+		GROUP_NUM = 2,
+		THREAD_NUM = 3,
+		MAX_THREAD_NUM = 3
+	};
 public :
 	HLSPlaylistDownloader();
 	~HLSPlaylistDownloader();
@@ -83,6 +88,36 @@ private:
 	THREAD_DATA m_DownInfoNext[3];
 	static atomic_bool m_bExitFlag;
 
+	bool isInDownloading[2];
+
+	vector<string> rmPending;
+	vector<string> downloadingList;
+
+	static THREAD_DATA m_ShareInfo[GROUP_NUM][THREAD_NUM];
+	uintptr_t m_hHandle[GROUP_NUM][THREAD_NUM];
+
+	string m_outputDir;
+	string m_baseUrlPath;
+
+	static mutex m_s_hlsListLock;
+	static vector<string> m_s_hlsList;
+	static vector<string> m_s_rmvList;
+
+	static vector<string> getDownloadList()
+	{
+		unique_lock<mutex> lock( m_s_hlsListLock );
+		return m_s_hlsList;
+	}
+
+	static void OnCallbackM3u8Change( const vector<string> &hlsList, const vector<string> &rmvList )
+	{
+		unique_lock<mutex> lock( m_s_hlsListLock );
+		m_s_hlsList = hlsList;
+		m_s_rmvList = rmvList;
+		DownloadDetermining();
+	}
+
+	static void DownloadDetermining();
 	long getItemLenth( const char *url );
 	long getItemLenth1( const char *url );
 	static long long getItemTime( const char *url );
@@ -99,9 +134,11 @@ public:
 	void InitDownloadThread();
 	void DeleteDownloadThread();
 	void setDownloadInfo( string urlPath, string outfile );
+	void setDownloadInfoEx( string urlBasePath, string outputDir );
 	bool StartMonitor( string strUrl, string strDurition );
 	bool downloadPlaylist();
 	bool downloadPlaylistEx( string sUrl, string sName );
+	bool StartDownloader();
 	void downloadMedia( string sUrl, string sName );
 	void downloadMediaOne( string sUrl, string sName );
 	void downloadMediaTwo( string sUrl, string sName );

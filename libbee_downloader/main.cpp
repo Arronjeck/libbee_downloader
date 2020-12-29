@@ -7,10 +7,13 @@
 #include <fstream>
 #include <vector>
 #include <ctime>
+#include <queue>
 
 #include "component/HLSPlaylistInfo.hpp"
 #include "component/HLSPlaylistDownloader.hpp"
 #include "component/HLSPlaylistUtilities.hpp"
+#include <crtdbg.h>
+
 
 using namespace std;
 
@@ -117,12 +120,15 @@ int sigle_download()
 	return 0;
 }
 
+
 int m3u8_monitor()
 {
 	string m3u8Url = "http://112.84.104.209:8000/hls/1001/index.m3u8?key=20205202020520";
 	string localDownloadFileDir = "E:/linux/curl_down/Ymp/100";
 	HLSPlaylistDownloader hlsDownloader;
 	hlsDownloader.StartMonitor( m3u8Url, localDownloadFileDir );
+	hlsDownloader.setDownloadInfo( "http://112.84.104.209:8000/hls/1001/", localDownloadFileDir );
+	hlsDownloader.StartDownloader();
 
 	return 0;
 }
