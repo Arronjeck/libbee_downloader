@@ -16,18 +16,23 @@ mutex HLSPlaylistDownloader::m_mtxFile;
 mutex HLSPlaylistDownloader::m_s_hlsListLock;
 vector<string> HLSPlaylistDownloader::m_s_hlsList;
 vector<string> HLSPlaylistDownloader::m_s_rmvList;
+mutex HLSPlaylistDownloader::m_mtxDownLock;
+queue<string> HLSPlaylistDownloader::m_downQueue;
+mutex HLSPlaylistDownloader::m_mtxCompelteLock;
+queue<string> HLSPlaylistDownloader::m_compelteQueue;
 THREAD_DATA HLSPlaylistDownloader::m_ShareInfo[GROUP_NUM][THREAD_NUM];
+atomic_bool HLSPlaylistDownloader::m_IsDownloading[GROUP_NUM];
 
 HLSPlaylistDownloader::HLSPlaylistDownloader()
 {
 	//InitDownloadThread();
-	InitDownloader();
+	//InitDownloader();
 	m_hThreadMonitor = NULL;
 }
 
 HLSPlaylistDownloader::~HLSPlaylistDownloader() {
-	//DeleteDownloadThread();
-	DeleteDownloader();
+	DeleteDownloadThread();
+	//DeleteDownloader();
 	if ( m_hThreadMonitor != NULL )
 	{
 		WaitForSingleObject( ( HANDLE * )m_hThreadMonitor, INFINITE );
@@ -128,6 +133,7 @@ bool HLSPlaylistDownloader::StartMonitor( string strUrl, string strDurition )
 	m_m3u8Info.sUrl = strUrl;
 	m_m3u8Info.sDurition = strDurition;
 	m_m3u8Info.bStartFlag = true;
+	m_bExitFlag = false;
 	m_hThreadMonitor = _beginthreadex( NULL, 0, &HLSPlaylistDownloader::DoM3u8Monitor, &m_m3u8Info, 0, &threadID );
 
 	return 0;
@@ -259,7 +265,7 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 		cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " begin : " << m3u8Info->sUrl << endl;
 	}
 
-	string strFileName = "indextt.m3u8";
+	string strFileName = "index.m3u8";
 	int iBegin = m3u8Info->sUrl.rfind( '/' );
 	int iEnd = m3u8Info->sUrl.find( "?key=" );
 	if ( iBegin != string::npos )
@@ -288,7 +294,7 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 		}
 		else if ( llCurTime != llTime )
 		{
-			cout << __FUNCTION__ << " m3u8 file changed." << endl;
+			//cout << __FUNCTION__ << " m3u8 file changed." << endl;
 			llTime = llCurTime;
 			string localDownloadFileName = m3u8Info->sDurition + "/" + strFileName;
 			string strBuffer;
@@ -303,28 +309,74 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 				}
 				m3u8Index.close();
 				vector<string> rmList;
-				lastList = quick_match( lastList, tsList, rmList );
-				cout << "New=" << tsList.size() << " Old=" << lastList.size() << endl;
-				for ( vector<string>::iterator it = lastList.begin(); it != lastList.end(); ++it )
-				{
-					cout << "item: " << *it << endl;
-				}
-				for ( vector<string>::iterator it = rmList.begin(); it != rmList.end(); ++it )
-				{
-					cout << "Rmoved item: " << *it << endl;
-				}
+				vector<string> totalList;
+				totalList = quick_match( lastList, tsList, rmList );
+				//cout << "Changed New=" << tsList.size() << " Old=" << lastList.size() << endl;
+// 				for ( vector<string>::iterator it = totalList.begin(); it != totalList.end(); ++it )
+// 				{
+// 					cout << "item: " << *it << endl;
+// 				}
+// 				for ( vector<string>::iterator it = rmList.begin(); it != rmList.end(); ++it )
+// 				{
+// 					cout << "Rmoved item: " << *it << endl;
+// 				}
 
-				OnCallbackM3u8Change( lastList, rmList );
+				OnCallbackM3u8Change( totalList, rmList );
+
+				dwCountTime = clock() - dwLastTime;;
+				cout << "run loop m3u8 cost time: " << dwCountTime << "ms" << endl;
 			}
 		}
 		else
 		{
-			cout << __FUNCTION__ << " m3u8 file not changed." << endl;
+			//cout << __FUNCTION__ << " m3u8 file not changed." << endl;
 		}
-		dwCountTime = clock() - dwLastTime;;
-		cout << "run loop m3u8 cost time: " << dwCountTime << "ms " << " wait 1000ms" << endl;
+
 		chrono::milliseconds dura( 1000 );
 		this_thread::sleep_for( dura );
+	}
+
+	cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " end" << endl;
+	return 0;
+}
+
+unsigned HLSPlaylistDownloader::downloadSingle( void *pArg )
+{
+	THREAD_DATA *pInfo = ( THREAD_DATA * )( pArg );
+	if ( pInfo == NULL )
+	{
+		cout << __FUNCTION__ << "[Error]: Invalid parameter, thread " << GetCurrentThreadId() << " end" << endl;
+		return -1;
+	}
+	else
+	{
+		cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " begin" << endl;
+	}
+
+	while ( true )
+	{
+		if ( m_bExitFlag )
+		{
+			return 0;
+		}
+
+		if ( pInfo->bStartFlag )
+		{
+			downloadItem( pInfo->sUrl.c_str(), pInfo->readBuffer );
+
+			ofstream fs = ofstream( pInfo->sSavePath, ios::out | ios::trunc | ios::binary );
+			fs << pInfo->readBuffer;
+			fs.close();
+
+			pInfo->bDoComplete = true;
+			pInfo->bStartFlag = false;
+		}
+		else
+		{
+			//cout << "Thread " << pInfo->sGroup << " is waiting..." << endl;
+			chrono::milliseconds dura( 500 );
+			this_thread::sleep_for( dura );
+		}
 	}
 
 	cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " end" << endl;
@@ -352,14 +404,14 @@ unsigned HLSPlaylistDownloader::downloadPro( void *pArg )
 
 		if ( pInfo->bStartFlag )
 		{
-			cout << "Thread " << pInfo->sGroup << " is downloading..." << endl;
+			cout << "Thread " << pInfo->sGroup << " start downloading..." << endl;
 			downloadBlockEx( pInfo->sUrl.c_str(), pInfo->iRangeBegin, pInfo->iRangeEnd, pInfo->readBuffer );
 			pInfo->bDoComplete = true;
 			pInfo->bStartFlag = false;
 		}
 		else
 		{
-			cout << "Thread " << pInfo->sGroup << " is waiting..." << endl;
+			//cout << "Thread " << pInfo->sGroup << " is waiting..." << endl;
 			chrono::milliseconds dura( 500 );
 			this_thread::sleep_for( dura );
 		}
@@ -374,9 +426,118 @@ size_t HLSPlaylistDownloader::save_header( void *ptr, size_t size, size_t nmemb,
 	return ( size_t )( size * nmemb );
 }
 
+void HLSPlaylistDownloader::OnCallbackM3u8Change( const vector<string> &hlsList, const vector<string> &rmvList )
+{
+	//cout << " m3u8 file changed." << endl;
+	unique_lock<mutex> lock( m_s_hlsListLock );
+	m_s_hlsList = hlsList;
+	m_s_rmvList = rmvList;
+	DownloadDetermining();
+}
+
+bool HLSPlaylistDownloader::RemoveCompelteFile()
+{
+	lock_guard<mutex> lock( m_mtxCompelteLock );
+	if ( m_compelteQueue.empty() )
+	{
+		return false;
+	}
+
+	while ( m_compelteQueue.size() > COMP_NUM )
+	{
+		string strFileName = m_compelteQueue.front();
+		// delete file
+		//system("del ");
+		m_compelteQueue.pop();
+	}
+
+	cout << "Compelte queue size: " << m_compelteQueue.size() << endl;
+}
+
+bool HLSPlaylistDownloader::AddDownItems()
+{
+	lock_guard<mutex> lock( m_mtxDownLock );
+	lock_guard<mutex> utlock( m_mtxCompelteLock );
+
+	string strlast = "";
+	bool bFirstFlag = false;
+	if ( m_downQueue.size() > 0 )
+	{
+		strlast = m_downQueue.back();
+	}
+	else if ( m_compelteQueue.size() > 0 )
+	{
+		strlast = m_compelteQueue.back();
+	}
+	else
+	{
+		bFirstFlag = true;
+	}
+
+	vector<string>::const_iterator it = m_s_hlsList.begin();
+	int iCount = 0;
+	while ( iCount < DOWN_NUM && m_downQueue.size() < DOWN_NUM && it != m_s_hlsList.end() )
+	{
+		if ( bFirstFlag )
+		{
+			m_downQueue.push( *it );
+		}
+		else if ( strlast == *it )
+		{
+			bFirstFlag = true;
+		}
+
+		iCount++;
+		it++;
+	}
+
+	if ( bFirstFlag == false )
+	{
+		it = m_s_hlsList.begin();
+		while ( m_downQueue.size() < DOWN_NUM && it != m_s_hlsList.end() )
+		{
+			m_downQueue.push( *it++ );
+		}
+	}
+
+	return true;
+}
+
+
+bool HLSPlaylistDownloader::RemoveDownItems( bool bSuccess, string baseDir )
+{
+	lock_guard<mutex> lock( m_mtxDownLock );
+	if ( m_downQueue.size() <= 0 )
+	{
+		return false;
+	}
+
+	if ( bSuccess )
+	{
+		lock_guard<mutex> utlock( m_mtxCompelteLock );
+		m_compelteQueue.push( m_downQueue.front() );
+		while ( m_compelteQueue.size() > COMP_NUM )
+		{
+			string strFileName = m_compelteQueue.front();
+			string strDelCmd = "del \"" + baseDir + '\\' + strFileName + "\"";
+			// delete file
+			system( strDelCmd.c_str() );
+			//system("rm p3.dat");
+			m_compelteQueue.pop();
+		}
+	}
+	m_downQueue.pop();
+
+	return true;
+}
+
 void HLSPlaylistDownloader::DownloadDetermining()
 {
+	// remove out of time
+	//RemoveCompelteFile();
 
+	// add new download item
+	AddDownItems();
 }
 
 long HLSPlaylistDownloader::getItemLenth( const char *url )
@@ -442,8 +603,6 @@ long HLSPlaylistDownloader::getItemLenth1( const char *url )
 
 long long HLSPlaylistDownloader::getItemTime( const char *url )
 {
-	double len = 0.0;
-	clock_t dwLastTime = clock();
 	CURL *curl;
 	string readBuffer;
 	CURLcode result = CURL_LAST;
@@ -471,16 +630,12 @@ long long HLSPlaylistDownloader::getItemTime( const char *url )
 					int nPosEnd = readBuffer.find( "\r\n", nPos );
 					string strTime = readBuffer.substr( nPos, nPosEnd - nPos );
 					llTime = atoll( strTime.c_str() );
-					cout << "file last-modified time: " << llTime << endl;
 				}
 			}
 		}
 		/* always cleanup */
 		curl_easy_cleanup( curl );
 	}
-
-	clock_t dwCountTime = clock() - dwLastTime;
-	cout << __FUNCTION__ << " cost time: " << dwCountTime << " ms" << endl;
 	return llTime;
 }
 
@@ -539,7 +694,7 @@ bool HLSPlaylistDownloader::downloadItem( const char *url, string &strReadBuffer
 
 	bool success = false;
 	strReadBuffer.clear();
-	clock_t dwLastTime = clock();
+	//clock_t dwLastTime = clock();
 	if ( true ) {
 		CURL *curl;
 		CURLcode result = CURL_LAST;
@@ -560,8 +715,8 @@ bool HLSPlaylistDownloader::downloadItem( const char *url, string &strReadBuffer
 		success = ( result == 0 );
 	}
 
-	clock_t dwCountTime = clock() - dwLastTime;
-	cout << __FUNCTION__ << " cost time: " << dwCountTime << " ms" << endl;
+	//clock_t dwCountTime = clock() - dwLastTime;
+	//cout << __FUNCTION__ << " cost time: " << dwCountTime << " ms" << endl;
 
 	return success;
 }
@@ -677,11 +832,60 @@ bool HLSPlaylistDownloader::downloadPlaylistEx( string sUrl, string sName )
 	return downloadItem( sUrl.c_str() );
 }
 
-bool HLSPlaylistDownloader::StartDownloader()
+void HLSPlaylistDownloader::RunDownloader()
 {
-	//StartDownloadObject();
-	//downloadMediaTwo( singleTsUrl, localDownloadFileName + "/3.ts" );
-	return false;
+	m_bExitFlag = false;
+
+	uintptr_t hHandle[GROUP_NUM] {NULL};
+	THREAD_DATA thInfo[GROUP_NUM];
+
+	unsigned int threadID;
+	for ( int i = 0; i < GROUP_NUM; ++i )
+	{
+		//m_IsDownloading[i] = false;
+		thInfo[i].bStartFlag = false;
+		thInfo[i].sGroup = "Single Thread";
+		hHandle[i] = _beginthreadex( NULL, 0, &HLSPlaylistDownloader::downloadSingle, &thInfo[i], 0, &threadID ); ;
+	}
+
+	while ( true )
+	{
+		if ( m_bExitFlag )
+		{
+			return;
+		}
+
+		string strDownItem = "";
+		if ( GetDownloadFristObject( strDownItem ) )
+		{
+			bool isBeasuy = true;
+			for ( int i = 0; i < GROUP_NUM; ++i )
+			{
+				if ( thInfo[i].bStartFlag == false )
+				{
+					cout << "begind down " << m_baseUrlPath + strDownItem << endl;
+					isBeasuy = false;
+					thInfo[i].Reset( m_baseUrlPath + strDownItem, m_outputDir + '/' + strDownItem, 0, 0 );
+					RemoveDownItems( true, m_outputDir );
+					cout << "End down " << m_outputDir + '/' + strDownItem << endl;
+					break;
+				}
+			}
+		}
+
+		this_thread::sleep_for( chrono::milliseconds( 500 ) );
+	}
+
+	m_bExitFlag = false;
+	WaitForMultipleObjectsEx( sizeof( hHandle ), ( HANDLE * )hHandle, FALSE, INFINITE, FALSE );
+
+	for ( int i = 0; i < GROUP_NUM; ++i )
+	{
+		CloseHandle( ( HANDLE )( hHandle[i] ) );
+		hHandle[i] = NULL;
+	}
+
+	return;
 }
 
 void HLSPlaylistDownloader::downloadMedia( string sUrl, string sName )

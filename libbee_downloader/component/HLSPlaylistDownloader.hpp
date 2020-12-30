@@ -11,6 +11,7 @@
 #include <process.h>
 #include <vadefs.h>
 #include <vector>
+#include <queue>
 
 using namespace std;
 
@@ -22,16 +23,17 @@ typedef struct __THREAD_DATA
 
 	string sGroup;
 	string sUrl;
+	string sSavePath;
 	string readBuffer;
 	int iRangeBegin;
 	int iRangeEnd;
 	atomic_bool bDoComplete;
 	atomic_bool bStartFlag;
 
-	void Reset( string group, string url, int iBegin, int iEnd )
+	void Reset( string url, string path, int iBegin, int iEnd )
 	{
-		sGroup = group;
 		sUrl = url;
+		sSavePath = path;
 		readBuffer.clear();
 		iRangeBegin = iBegin;
 		iRangeEnd = iEnd;
@@ -42,6 +44,7 @@ typedef struct __THREAD_DATA
 	{
 		sGroup = "";
 		sUrl = "";
+		sSavePath = "";
 		readBuffer.clear();
 		iRangeBegin = 0;
 		iRangeEnd = 0;
@@ -72,7 +75,9 @@ public:
 	enum {
 		GROUP_NUM = 2,
 		THREAD_NUM = 3,
-		MAX_THREAD_NUM = 3
+		MAX_THREAD_NUM = 3,
+		DOWN_NUM = 3,
+		COMP_NUM = 6
 	};
 
 public :
@@ -93,13 +98,81 @@ private:
 	THREAD_DATA m_DownInfoNext[3];
 	static atomic_bool m_bExitFlag;
 
+	static atomic_bool m_bSingleMode;
+
 	bool isInDownloading[2];
 
 	vector<string> rmPending;
 	vector<string> downloadingList;
 
+	static atomic_bool m_IsDownloading[GROUP_NUM];
 	static THREAD_DATA m_ShareInfo[GROUP_NUM][THREAD_NUM];
 	uintptr_t m_hHandle[GROUP_NUM][THREAD_NUM];
+
+	static mutex m_mtxDownLock;
+	static queue<string> m_downQueue;
+	static mutex m_mtxCompelteLock;
+	static queue<string> m_compelteQueue;
+
+	static void PushDownloadObject( __in const string strObj )
+	{
+		lock_guard<mutex> lock( m_mtxDownLock );
+		m_downQueue.push( strObj );
+	}
+	static bool PopDownloadObject( )
+	{
+		lock_guard<mutex> lock( m_mtxDownLock );
+		if ( m_downQueue.empty() )
+		{
+			return false;
+		}
+		m_downQueue.pop();
+		return true;
+	}
+
+	void Down_Producer()
+	{
+
+	}
+
+	void Down_Consumer()
+	{
+
+	}
+
+	static bool GetDownloadFristObject( __out string &strObj )
+	{
+		lock_guard<mutex> lock( m_mtxDownLock );
+		if ( m_downQueue.empty() )
+		{
+			return false;
+		}
+		strObj = m_downQueue.front();
+		return true;
+	}
+
+	static void PushCompelteObject( __in const string strObj )
+	{
+		lock_guard<mutex> lock( m_mtxCompelteLock );
+		m_compelteQueue.push( strObj );
+	}
+	static bool PopCompelteObject( __out string &strObj )
+	{
+		lock_guard<mutex> lock( m_mtxCompelteLock );
+		if ( m_compelteQueue.empty() )
+		{
+			return false;
+		}
+		strObj = m_compelteQueue.front();
+		m_compelteQueue.pop();
+		return true;
+	}
+
+	static bool AddDownItems();
+
+	static bool RemoveDownItems( bool bSuccess, string baseDir );
+
+	static bool RemoveCompelteFile();
 
 	string m_outputDir;
 	string m_baseUrlPath;
@@ -114,13 +187,7 @@ private:
 		return m_s_hlsList;
 	}
 
-	static void OnCallbackM3u8Change( const vector<string> &hlsList, const vector<string> &rmvList )
-	{
-		unique_lock<mutex> lock( m_s_hlsListLock );
-		m_s_hlsList = hlsList;
-		m_s_rmvList = rmvList;
-		DownloadDetermining();
-	}
+	static void OnCallbackM3u8Change( const vector<string> &hlsList, const vector<string> &rmvList );
 
 	static void DownloadDetermining();
 	long getItemLenth( const char *url );
@@ -135,7 +202,11 @@ private:
 	static size_t curlCallBack( void *curlData, size_t size, size_t receievedSize, void *writeToFileBuffer );
 	static unsigned downloadFunc( void *pArg );
 	static unsigned DoM3u8Monitor( void *pArg );
+	static unsigned downloadSingle( void *pArg );
 	static unsigned downloadPro( void *pArg );
+
+	static unsigned downloadMediaSigleThread( string sUrl, string sName );
+	static unsigned downloadMediaMultiThread( string sUrl, string sName );
 public:
 	void InitDownloadThread();
 	void DeleteDownloadThread();
@@ -146,7 +217,7 @@ public:
 	bool StartMonitor( string strUrl, string strDurition );
 	bool downloadPlaylist();
 	bool downloadPlaylistEx( string sUrl, string sName );
-	bool StartDownloader();
+	void RunDownloader();
 	void downloadMedia( string sUrl, string sName );
 	void downloadMediaOne( string sUrl, string sName );
 	void downloadMediaTwo( string sUrl, string sName );

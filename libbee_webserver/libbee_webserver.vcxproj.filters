@@ -13,33 +13,42 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="component">
-      <UniqueIdentifier>{467c7ff1-82bc-4218-85e9-0da06987d23d}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="libbee_webserver.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="component\HLSPlaylistDownloader.cpp">
-      <Filter>component</Filter>
-    </ClCompile>
-    <ClCompile Include="component\HLSPlaylistInfo.cpp">
-      <Filter>component</Filter>
-    </ClCompile>
-    <ClCompile Include="component\HLSPlaylistUtilities.cpp">
-      <Filter>component</Filter>
+    <ClCompile Include="http_examples.cpp">
+      <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="component\HLSPlaylistDownloader.hpp">
-      <Filter>component</Filter>
+    <ClInclude Include="asio_compatibility.hpp">
+      <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="component\HLSPlaylistInfo.hpp">
-      <Filter>component</Filter>
+    <ClInclude Include="client_http.hpp">
+      <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="component\HLSPlaylistUtilities.hpp">
-      <Filter>component</Filter>
+    <ClInclude Include="client_https.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="mutex.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="server_http.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="server_https.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="status_code.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="utility.hpp">
+      <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
