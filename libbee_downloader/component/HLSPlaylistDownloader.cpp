@@ -13,6 +13,8 @@
 
 atomic_bool HLSPlaylistDownloader::m_bExitFlag = false;
 mutex HLSPlaylistDownloader::m_mtxFile;
+string HLSPlaylistDownloader::m_strBuffer = "";
+long long HLSPlaylistDownloader::m_llLastModifyTime = 0l;
 mutex HLSPlaylistDownloader::m_s_hlsListLock;
 vector<string> HLSPlaylistDownloader::m_s_hlsList;
 vector<string> HLSPlaylistDownloader::m_s_rmvList;
@@ -301,7 +303,12 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 			if ( downloadItem( m3u8Info->sUrl.c_str(), strBuffer ) )
 			{
 				vector<string> tsList =  HLSPlaylistUtilities::buildListFromStream( strBuffer );
-				unique_lock<mutex> lock( m_mtxFile );
+
+				{
+					unique_lock<mutex> lock( m_mtxFile );
+					m_strBuffer = strBuffer;
+					m_llLastModifyTime = llTime;
+				}
 				ofstream m3u8Index = ofstream( localDownloadFileName, ios::out | ios::trunc | ios::binary );
 				if ( m3u8Index.is_open() )
 				{
@@ -324,7 +331,7 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 				OnCallbackM3u8Change( totalList, rmList );
 
 				dwCountTime = clock() - dwLastTime;;
-				cout << "run loop m3u8 cost time: " << dwCountTime << "ms" << endl;
+				//cout << "run loop m3u8 cost time: " << dwCountTime << "ms" << endl;
 			}
 		}
 		else
@@ -338,6 +345,13 @@ unsigned HLSPlaylistDownloader::DoM3u8Monitor( void *pArg )
 
 	cout << __FUNCTION__ << " Thread " << GetCurrentThreadId() << " end" << endl;
 	return 0;
+}
+
+long long HLSPlaylistDownloader::GetM3u8File( string &str )
+{
+	unique_lock<mutex> lock( m_mtxFile );
+	str = m_strBuffer;
+	return m_llLastModifyTime;
 }
 
 unsigned HLSPlaylistDownloader::downloadSingle( void *pArg )
@@ -863,11 +877,11 @@ void HLSPlaylistDownloader::RunDownloader()
 			{
 				if ( thInfo[i].bStartFlag == false )
 				{
-					cout << "begind down " << m_baseUrlPath + strDownItem << endl;
+					//cout << "begind down " << m_baseUrlPath + strDownItem << endl;
 					isBeasuy = false;
 					thInfo[i].Reset( m_baseUrlPath + strDownItem, m_outputDir + '/' + strDownItem, 0, 0 );
 					RemoveDownItems( true, m_outputDir );
-					cout << "End down " << m_outputDir + '/' + strDownItem << endl;
+					//cout << "End down " << m_outputDir + '/' + strDownItem << endl;
 					break;
 				}
 			}

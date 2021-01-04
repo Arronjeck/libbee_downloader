@@ -8,14 +8,17 @@
 #include <vector>
 #include <ctime>
 #include <queue>
+#include <boost/filesystem.hpp>
 
 #include "component/HLSPlaylistInfo.hpp"
 #include "component/HLSPlaylistDownloader.hpp"
 #include "component/HLSPlaylistUtilities.hpp"
 #include <crtdbg.h>
 
+#include "webserver/server_http.hpp"
 
 using namespace std;
+using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
 //const string playlistRootUrl = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8";
 const string playlistRootUrl = "http://112.84.104.209:8000/hls/1001/index.m3u8";
@@ -120,15 +123,136 @@ int sigle_download()
 	return 0;
 }
 
+time_t get_last_mtime( string strPathFile )
+{
+	struct stat result;
+	if ( stat( strPathFile.c_str(), &result ) == 0 )
+	{
+		auto mod_time = result.st_mtime;
+	}
+
+	return result.st_mtime;
+}
 
 int m3u8_monitor()
 {
 	string m3u8Url = "http://112.84.104.209:8000/hls/1001/index.m3u8?key=20205202020520";
-	string localDownloadFileDir = "E:/linux/curl_down/Ymp/100";
+	string localDownloadFileDir = "./web";
+
+	//
+	HttpServer server;
+	server.config.port = 8080;
+	server.default_resource["GET"] = []( shared_ptr<HttpServer::Response> response, shared_ptr<HttpServer::Request> request )
+	{
+		try {
+
+			cout << "webserver: request for " << request->path << endl;
+
+			auto web_root_path = boost::filesystem::canonical( "web" );
+			//string strRoot = web_root_path->c_str();
+			string strRoot = web_root_path.string();
+			auto path = strRoot + request->path;
+			//auto path = boost::filesystem::canonical( web_root_path / request->path );
+			// Check if path is within web_root_path
+// 			if ( distance( web_root_path.begin(), web_root_path.end() ) > distance( path.begin(), path.end() ) ||
+// 					!equal( web_root_path.begin(), web_root_path.end(), path.begin() ) ) {
+// 				throw invalid_argument( "path must be within root path" );
+// 			}
+// 			if ( boost::filesystem::is_directory( path ) ) {
+// 				path /= "index.html";
+// 			}
+
+			// Uncomment the following line to enable Cache-Control
+			// header.emplace("Cache-Control", "max-age=86400");
+
+			SimpleWeb::CaseInsensitiveMultimap header;
+			if ( request->path.find( "index.m3u8" ) != string::npos )
+			{
+				string strFile;
+				long long llTime = HLSPlaylistDownloader::GetM3u8File( strFile );
+				auto length = strFile.size();
+				header.emplace( "accept-ranges", "bytes" );
+				unsigned int endIndex = length;
+				header.emplace( "content-range", "bytes 0-" + to_string( endIndex - 1 ) + "/" + to_string( length ) );
+				header.emplace( "content-type", "application/octet-stream" );
+				header.emplace( "connection", "keep-alive" );
+				header.emplace( "content-length", to_string( length ) );
+				header.emplace( "last-modified", to_string( llTime ) );
+				response->write( header );
+				response->write( strFile.c_str(), length );
+				cout << strFile << endl;
+
+			}
+			else
+			{
+				auto ifs = make_shared<ifstream>();
+				ifs->open( path.c_str(), ifstream::in | ios::binary | ios::ate );
+
+				if ( *ifs ) {
+					auto length = ifs->tellg();
+					ifs->seekg( 0, ios::beg );
+					header.emplace( "accept-ranges", "bytes" );
+					unsigned int endIndex = length;
+					header.emplace( "content-range", "bytes 0-" + to_string( endIndex - 1 ) + "/" + to_string( length ) );
+					header.emplace( "content-type", "application/octet-stream" );
+					header.emplace( "connection", "keep-alive" );
+					header.emplace( "content-length", to_string( length ) );
+					long long mt = get_last_mtime( path.c_str() );
+					header.emplace( "last-modified", to_string( mt ) );
+					response->write( header );
+
+					// Trick to define a recursive function within this scope (for example purposes)
+					class FileServer {
+					public:
+						static void read_and_send( const shared_ptr<HttpServer::Response> &response, const shared_ptr<ifstream> &ifs ) {
+							// Read and send 128 KB at a time
+							static vector<char> buffer( 131072 ); // Safe when server is running on one thread
+							streamsize read_length;
+							if ( ( read_length = ifs->read( &buffer[0], static_cast<streamsize>( buffer.size() ) ).gcount() ) > 0 ) {
+								response->write( &buffer[0], read_length );
+								if ( read_length == static_cast<streamsize>( buffer.size() ) ) {
+									response->send( [response, ifs]( const SimpleWeb::error_code & ec ) {
+										if ( !ec ) {
+											read_and_send( response, ifs );
+										}
+										else {
+											cerr << "Connection interrupted" << endl;
+										}
+									} );
+								}
+							}
+						}
+					};
+					FileServer::read_and_send( response, ifs );
+				}
+				else {
+					_ASSERT( FALSE );
+					throw invalid_argument( "could not read file" );
+				}
+			}
+		}
+		catch ( const exception &e ) {
+			response->write( SimpleWeb::StatusCode::client_error_bad_request, "Could not open path " + request->path + ": " + e.what() );
+		}
+	};
+
+	server.on_error = []( shared_ptr<HttpServer::Request> /*request*/, const SimpleWeb::error_code & /*ec*/ ) {
+		// Handle errors here
+		// Note that connection timeouts will also call this handle with ec set to SimpleWeb::errc::operation_canceled
+	};
+
+	thread server_thread( [&server]() {
+		// Start server
+		server.start();
+	} );
+
+	//
 	HLSPlaylistDownloader hlsDownloader;
 	hlsDownloader.StartMonitor( m3u8Url, localDownloadFileDir );
 	hlsDownloader.setDownloadInfoEx( "http://112.84.104.209:8000/hls/1001/", localDownloadFileDir );
 	hlsDownloader.RunDownloader();
+
+
 
 	return 0;
 }

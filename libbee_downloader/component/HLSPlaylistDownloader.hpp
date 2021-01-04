@@ -90,6 +90,8 @@ private:
 	ofstream m_hlsstream; // Every file that is being downloaded by this class this ofstream is used to save the downloaded file
 
 	static mutex m_mtxFile;
+	static string m_strBuffer;
+	static long long m_llLastModifyTime;
 	MONITOR_DATA m_m3u8Info;
 	uintptr_t m_hThreadMonitor;
 	uintptr_t m_hThreadHandle[3];
@@ -224,6 +226,7 @@ public:
 	void downloadMediaThree( string sUrl, string sName );
 	void downloadPlaylistMedia( string baseUrlPath, string playlistPath, string destination );
 	void downloadIndividualPlaylist( string baseUrlPath, string playlistName, string destination );
+	static long long GetM3u8File( string &str );
 };
 
 #endif /* HLSPlaylistDownloader_hpp */

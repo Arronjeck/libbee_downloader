@@ -28,6 +28,11 @@
     <ClInclude Include="component\HLSPlaylistDownloader.hpp" />
     <ClInclude Include="component\HLSPlaylistInfo.hpp" />
     <ClInclude Include="component\HLSPlaylistUtilities.hpp" />
+    <ClInclude Include="webserver\asio_compatibility.hpp" />
+    <ClInclude Include="webserver\mutex.hpp" />
+    <ClInclude Include="webserver\server_http.hpp" />
+    <ClInclude Include="webserver\status_code.hpp" />
+    <ClInclude Include="webserver\utility.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
@@ -117,13 +122,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;BUILDING_LIBCURL;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\..\..\3rd\libcurl_7_64_1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\..\..\3rd\libcurl_7_64_1\include;$(SolutionDir)..\..\..\3rd\boost_1_70_0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp14</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)..\..\..\3rd\libcurl_7_64_1\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\..\..\3rd\libcurl_7_64_1\lib;$(SolutionDir)..\..\..\3rd\boost_1_70_0\libs\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>libcurl64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

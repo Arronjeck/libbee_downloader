@@ -16,6 +16,9 @@
     <Filter Include="component">
       <UniqueIdentifier>{1f823f4c-2101-4da9-8ca1-42377e2e0f6d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="webserver">
+      <UniqueIdentifier>{5f152813-ae3b-4e34-9496-cf3ae2d32415}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -40,6 +43,21 @@
     </ClInclude>
     <ClInclude Include="component\HLSPlaylistUtilities.hpp">
       <Filter>component</Filter>
+    </ClInclude>
+    <ClInclude Include="webserver\asio_compatibility.hpp">
+      <Filter>webserver</Filter>
+    </ClInclude>
+    <ClInclude Include="webserver\mutex.hpp">
+      <Filter>webserver</Filter>
+    </ClInclude>
+    <ClInclude Include="webserver\server_http.hpp">
+      <Filter>webserver</Filter>
+    </ClInclude>
+    <ClInclude Include="webserver\status_code.hpp">
+      <Filter>webserver</Filter>
+    </ClInclude>
+    <ClInclude Include="webserver\utility.hpp">
+      <Filter>webserver</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
